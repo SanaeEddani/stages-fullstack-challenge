@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Article;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ArticleController extends Controller
 {
@@ -15,21 +16,22 @@ class ArticleController extends Controller
     {
         $articles = Article::all();
 
-        $articles = $articles->map(function ($article) use ($request) {
-            if ($request->has('performance_test')) {
-                usleep(30000); // 30ms par article pour simuler le coût du N+1
-            }
+      $articles = $articles->map(function ($article) use ($request) {
+    if ($request->has('performance_test')) {
+        usleep(30000);
+    }
 
-            return [
-                'id' => $article->id,
-                'title' => $article->title,
-                'content' => substr($article->content, 0, 200) . '...',
-                'author' => $article->author->name,
-                'comments_count' => $article->comments->count(),
-                'published_at' => $article->published_at,
-                'created_at' => $article->created_at,
-            ];
-        });
+    return [
+        'id' => $article->id,
+        'title' => $article->title,
+        'content' => substr($article->content, 0, 200) . '...',
+        'author' => $article->author->name,
+        'comments_count' => $article->comments->count(),
+        'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+        'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
+
+    ];
+});
 
         return response()->json($articles);
     }
@@ -48,16 +50,21 @@ class ArticleController extends Controller
             'author' => $article->author->name,
             'author_id' => $article->author->id,
             'image_path' => $article->image_path,
-            'published_at' => $article->published_at,
-            'created_at' => $article->created_at,
-            'comments' => $article->comments->map(function ($comment) {
-                return [
-                    'id' => $comment->id,
-                    'content' => $comment->content,
-                    'user' => $comment->user->name,
-                    'created_at' => $comment->created_at,
-                ];
-            }),
+'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
+
+
+
+           'comments' => $article->comments->map(function ($comment) {
+    return [
+        'id' => $comment->id,
+        'content' => $comment->content,
+        'user' => $comment->user->name,
+       'created_at' => $comment->created_at ? $comment->created_at->toIso8601String() : null,
+
+    ];
+}),
+
         ]);
     }
 
@@ -84,7 +91,8 @@ class ArticleController extends Controller
             'id' => $article->id,
             'title' => $article->title,
             'content' => substr($article->content, 0, 200),
-            'published_at' => $article->published_at,
+         'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+
         ];
     }));
 }
@@ -141,4 +149,3 @@ class ArticleController extends Controller
         return response()->json(['message' => 'Article deleted successfully']);
     }
 }
-
