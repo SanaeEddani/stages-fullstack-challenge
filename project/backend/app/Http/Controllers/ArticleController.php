@@ -64,29 +64,31 @@ class ArticleController extends Controller
     /**
      * Search articles.
      */
-    public function search(Request $request)
-    {
-        $query = $request->input('q');
+   public function search(Request $request)
+{
+    $query = $request->input('q');
 
-        if (!$query) {
-            return response()->json([]);
-        }
-
-        $articles = DB::select(
-            "SELECT * FROM articles WHERE title LIKE '%" . $query . "%'"
-        );
-
-        $results = array_map(function ($article) {
-            return [
-                'id' => $article->id,
-                'title' => $article->title,
-                'content' => substr($article->content, 0, 200),
-                'published_at' => $article->published_at,
-            ];
-        }, $articles);
-
-        return response()->json($results);
+    if (!$query) {
+        return response()->json([]);
     }
+
+    $articles = DB::table('articles')
+        ->whereRaw(
+            'title COLLATE utf8mb4_unicode_ci LIKE ?',
+            ['%' . $query . '%']
+        )
+        ->get();
+
+    return response()->json($articles->map(function ($article) {
+        return [
+            'id' => $article->id,
+            'title' => $article->title,
+            'content' => substr($article->content, 0, 200),
+            'published_at' => $article->published_at,
+        ];
+    }));
+}
+
 
     /**
      * Store a newly created article.
