@@ -64,20 +64,21 @@ class ArticleController extends Controller
     /**
      * Search articles.
      */
-   public function search(Request $request)
+
+
+public function search(Request $request)
 {
-    $query = $request->input('q');
+    $query = trim($request->input('q'));
 
     if (!$query) {
         return response()->json([]);
     }
 
-    $articles = DB::table('articles')
-        ->whereRaw(
-            'title COLLATE utf8mb4_unicode_ci LIKE ?',
-            ['%' . $query . '%']
-        )
-        ->get();
+    $articles = Article::where(
+        'title',
+        'LIKE',
+        '%' . $query . '%'
+    )->get();
 
     return response()->json($articles->map(function ($article) {
         return [
@@ -88,6 +89,7 @@ class ArticleController extends Controller
         ];
     }));
 }
+
 
 
     /**
