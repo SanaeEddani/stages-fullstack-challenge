@@ -14,7 +14,7 @@ class ArticleController extends Controller
      */
     public function index(Request $request)
     {
-        $articles = Article::all();
+   $articles = Article::with(['author', 'comments.user'])->get();
 
       $articles = $articles->map(function ($article) use ($request) {
     if ($request->has('performance_test')) {
