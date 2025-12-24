@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Article;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class ArticleController extends Controller
@@ -14,24 +15,32 @@ class ArticleController extends Controller
      */
     public function index(Request $request)
     {
-   $articles = Article::with(['author', 'comments.user'])->get();
+        $articles = Cache::remember('articles_list', 60, function () use ($request) {
+            \Log::info('CACHE MISS: Articles fetched from DB'); // log cache miss
 
-      $articles = $articles->map(function ($article) use ($request) {
-    if ($request->has('performance_test')) {
-        usleep(30000);
-    }
+            $articles = Article::with(['author', 'comments.user'])->get();
 
-    return [
-        'id' => $article->id,
-        'title' => $article->title,
-        'content' => substr($article->content, 0, 200) . '...',
-        'author' => $article->author->name,
-        'comments_count' => $article->comments->count(),
-        'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
-        'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
+            return $articles->map(function ($article) use ($request) {
+                if ($request->has('performance_test')) {
+                    usleep(30000);
+                }
 
-    ];
-});
+                return [
+                    'id' => $article->id,
+                    'title' => $article->title,
+                    'content' => substr($article->content, 0, 200) . '...',
+                    'author' => $article->author->name,
+                    'comments_count' => $article->comments->count(),
+                    'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+                    'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
+                ];
+            });
+        });
+
+        // Si cache existait déjà
+        if (Cache::has('articles_list')) {
+            \Log::info('CACHE HIT: Articles fetched from cache');
+        }
 
         return response()->json($articles);
     }
@@ -50,55 +59,41 @@ class ArticleController extends Controller
             'author' => $article->author->name,
             'author_id' => $article->author->id,
             'image_path' => $article->image_path,
-'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
-'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
-
-
-
-           'comments' => $article->comments->map(function ($comment) {
-    return [
-        'id' => $comment->id,
-        'content' => $comment->content,
-        'user' => $comment->user->name,
-       'created_at' => $comment->created_at ? $comment->created_at->toIso8601String() : null,
-
-    ];
-}),
-
+            'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+            'created_at'   => $article->created_at ? $article->created_at->toIso8601String() : null,
+            'comments' => $article->comments->map(function ($comment) {
+                return [
+                    'id' => $comment->id,
+                    'content' => $comment->content,
+                    'user' => $comment->user->name,
+                    'created_at' => $comment->created_at ? $comment->created_at->toIso8601String() : null,
+                ];
+            }),
         ]);
     }
 
     /**
      * Search articles.
      */
+    public function search(Request $request)
+    {
+        $query = trim($request->input('q'));
 
+        if (!$query) {
+            return response()->json([]);
+        }
 
-public function search(Request $request)
-{
-    $query = trim($request->input('q'));
+        $articles = Article::where('title', 'LIKE', '%' . $query . '%')->get();
 
-    if (!$query) {
-        return response()->json([]);
+        return response()->json($articles->map(function ($article) {
+            return [
+                'id' => $article->id,
+                'title' => $article->title,
+                'content' => substr($article->content, 0, 200),
+                'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
+            ];
+        }));
     }
-
-    $articles = Article::where(
-        'title',
-        'LIKE',
-        '%' . $query . '%'
-    )->get();
-
-    return response()->json($articles->map(function ($article) {
-        return [
-            'id' => $article->id,
-            'title' => $article->title,
-            'content' => substr($article->content, 0, 200),
-         'published_at' => $article->published_at ? $article->published_at->toIso8601String() : null,
-
-        ];
-    }));
-}
-
-
 
     /**
      * Store a newly created article.
@@ -120,6 +115,8 @@ public function search(Request $request)
             'published_at' => now(),
         ]);
 
+        Cache::forget('articles_list'); // invalidate cache
+
         return response()->json($article, 201);
     }
 
@@ -136,6 +133,7 @@ public function search(Request $request)
         ]);
 
         $article->update($validated);
+        Cache::forget('articles_list'); // invalidate cache
 
         return response()->json($article);
     }
@@ -147,6 +145,7 @@ public function search(Request $request)
     {
         $article = Article::findOrFail($id);
         $article->delete();
+        Cache::forget('articles_list'); // invalidate cache
 
         return response()->json(['message' => 'Article deleted successfully']);
     }
