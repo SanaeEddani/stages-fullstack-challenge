@@ -2,24 +2,22 @@
 
 namespace App\Http\Controllers;
 
+
 use App\Models\Article;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class ArticleController extends Controller
 {
     /**
      * Display a listing of articles.
      */
-    public function index(Request $request)
-    {
-        $articles = Article::all();
-
-        $articles = $articles->map(function ($article) use ($request) {
-            if ($request->has('performance_test')) {
-                usleep(30000); // 30ms par article pour simuler le coût du N+1
-            }
-
+  public function index(Request $request)
+{
+    $articles = Cache::remember('articles_list', 60, function () use ($request) {
+        \Log::info('CACHE MISS: Articles fetched from DB'); // <-- ajoute ça
+        return Article::with(['author', 'comments.user'])->get()->map(function ($article) use ($request) {
             return [
                 'id' => $article->id,
                 'title' => $article->title,
@@ -30,9 +28,11 @@ class ArticleController extends Controller
                 'created_at' => $article->created_at,
             ];
         });
+    });
 
-        return response()->json($articles);
-    }
+    return response()->json($articles);
+}
+
 
     /**
      * Display the specified article.
@@ -109,6 +109,7 @@ class ArticleController extends Controller
             'image_path' => $validated['image_path'] ?? null,
             'published_at' => now(),
         ]);
+Cache::forget('articles_list');
 
         return response()->json($article, 201);
     }
@@ -126,6 +127,8 @@ class ArticleController extends Controller
         ]);
 
         $article->update($validated);
+        Cache::forget('articles_list');
+
 
         return response()->json($article);
     }
@@ -137,6 +140,8 @@ class ArticleController extends Controller
     {
         $article = Article::findOrFail($id);
         $article->delete();
+        Cache::forget('articles_list');
+
 
         return response()->json(['message' => 'Article deleted successfully']);
     }
